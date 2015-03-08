@@ -20,7 +20,7 @@ GMainLoop *loop;
     GstMessage *msg;
     GstStateChangeReturn ret;
     GstElement *pipeline_v1, *pipeline_v2;
-    GstElement *source, *sink_app, *sink_file, *csp, *enc, *videotee, *parser;
+    GstElement *source, *sink_app, *sink_file, *csp, *enc, *videotee, *parser,*mart;
     GstElement *queue1, *queue2;
     GstElement *rtp, *udpsink, *fakesink;
 
@@ -77,7 +77,7 @@ static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer user_data) {
             printf("[%s]: %s %s\n", GST_OBJECT_NAME(msg->src), err->message, debug);
             g_free(debug);
             g_error_free(err);
-            // 	exit(1);
+            exit(1);
             break;
         }
         case GST_MESSAGE_EOS:
@@ -166,14 +166,17 @@ int main(int argc, char *argv[]) {
     printf("Start Record file %s : shutter %d\n",argv[1],atoi(argv[2]));	
 
     int numberoffr=atoi(argv[3]);
+    //source = gst_element_factory_make("imxv4l2src", "video");
     source = gst_element_factory_make("v4l2src", "video");
     
     queue1 = gst_element_factory_make("queue", "queue");
-  g_object_set( G_OBJECT(queue1), "max-size-buffers", 10, NULL);
+    //g_object_set( G_OBJECT(queue1), "max-size-buffers", 10, NULL);
         
 //   enc = gst_element_factory_make("vpuenc", "imxvpu");
      enc = gst_element_factory_make("ffenc_mpeg4", "ffenc_mpeg4");
-            
+     
+     mart=gst_element_factory_make("matroskamux","matroskamux");
+                                    
      sink_file = gst_element_factory_make("filesink", "filesink");
      g_object_set(G_OBJECT(sink_file), "location", argv[1], NULL);
     
@@ -184,15 +187,15 @@ int main(int argc, char *argv[]) {
 
     pipeline_v1 = gst_pipeline_new("cam-pipeline");
     
-    if (!pipeline_v1 ||!source  || !sink_file || !queue1 || !enc ) {
+    if (!pipeline_v1 || !source  || !sink_file || !queue1 || !enc || !mart) {
         g_printerr("Not pipeline element could be created.\n");
         return -1;
     }
 
-    gst_bin_add_many(GST_BIN(pipeline_v1), source,queue1,  enc, sink_file, NULL);
+    gst_bin_add_many(GST_BIN(pipeline_v1), source,queue1, enc,mart, sink_file, NULL);
    
 
-    if (!gst_element_link_many(source, queue1, enc, sink_file , NULL)) {
+    if (!gst_element_link_many(source, queue1, enc, mart,sink_file , NULL)) {
         gst_object_unref(pipeline_v1);
         printf("Errors link many \n");
         exit(1);
