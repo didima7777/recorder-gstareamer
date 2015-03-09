@@ -8,12 +8,17 @@
 #include <gst/app/gstappsrc.h>
 #include <gst/app/gstappbuffer.h>
 #include <gst/app/gstappsink.h>  
+#include <linux/videodev2.h>
+#include <linux/mxc_v4l2.h>
+#include <sys/ioctl.h>
 #include <opencv2/opencv.hpp>
 #include "opencv2/video/background_segm.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 
 int fd_video;
+int shutter;
+int gain;
 GMainLoop *loop;
 
     GstBus *bus;
@@ -31,6 +36,32 @@ typedef struct _CustomData {
     GstElement *pipeline;
     GMainLoop *loop;
 } CustomData;
+
+
+void set_exposure(int exp) {
+	v4l2_control par_exp;
+	par_exp.id=V4L2_CID_EXPOSURE;
+	par_exp.value=exp;
+	if (ioctl(fd_video, VIDIOC_S_CTRL, &par_exp) < 0)
+	{
+		printf("\nVIDIOC_S_CTRL failed\n");
+	} else {
+	 printf("shutter set %d \n",par_exp.value);
+	}
+}
+
+
+void set_gain(int gain) {
+	v4l2_control par_exp;
+	par_exp.id=V4L2_CID_GAIN;
+	par_exp.value=gain;
+	if (ioctl(fd_video, VIDIOC_S_CTRL, &par_exp) < 0)
+	{
+		printf("\nVIDIOC_S_CTRL failed\n");
+	} else {
+	 printf("gain set %d \n",par_exp.value);
+	}
+}
 
 void print_buffer (GstBuffer *buffer, const char *title) {
     
@@ -62,7 +93,9 @@ static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer user_data) {
             printf("[%s]: %s -> %s\n", GST_OBJECT_NAME(msg->src), gst_element_state_get_name(old_state), gst_element_state_get_name(new_state));
             if (strcmp(msg->src->name,"video")==0) {
                 if (strcmp(gst_element_state_get_name(new_state),"READY")==0) {
-                    g_object_get (G_OBJECT (source), "device-fd", &fd_video, NULL);
+                    g_object_get (G_OBJECT (source), "file-id", &fd_video, NULL);
+		    set_exposure(shutter);
+ 		    set_gain(gain);
                     printf("video file %d \n",fd_video);
                 }
             }
@@ -160,20 +193,24 @@ int main(int argc, char *argv[]) {
     gst_init(&argc, &argv);
 
     if (argc<3) {
-        printf("command must have three arguments: file , shutte and number of frames example (name.avi 100 300)");
+        printf("command must have four arguments: file , shutte, gain and number of frames example (name.avi 100 10 300).\n");
         return 0;
     }
+
+    shutter=atoi(argv[2]);
+    gain=atoi(argv[3]);
     printf("Start Record file %s : shutter %d\n",argv[1],atoi(argv[2]));	
 
-    int numberoffr=atoi(argv[3]);
-    //source = gst_element_factory_make("imxv4l2src", "video");
-    source = gst_element_factory_make("v4l2src", "video");
+    int numberoffr=atoi(argv[4]);
+    source = gst_element_factory_make("imxv4l2src", "video");
+//    source = gst_element_factory_make("v4l2src", "video");
     
     queue1 = gst_element_factory_make("queue", "queue");
     //g_object_set( G_OBJECT(queue1), "max-size-buffers", 10, NULL);
         
-//   enc = gst_element_factory_make("vpuenc", "imxvpu");
-     enc = gst_element_factory_make("ffenc_mpeg4", "ffenc_mpeg4");
+       enc = gst_element_factory_make("vpuenc", "imxvpu");
+ 	     g_object_set( G_OBJECT(enc), "codec", 6, NULL); 
+//     enc = gst_element_factory_make("ffenc_mpeg4", "ffenc_mpeg4");
      
      mart=gst_element_factory_make("matroskamux","matroskamux");
                                     
@@ -183,7 +220,7 @@ int main(int argc, char *argv[]) {
  //  g_object_set(G_OBJECT(source), "device", "/dev/video0", NULL);
      g_object_set( G_OBJECT(source), "num-buffers", numberoffr, NULL);
  //  g_object_set( G_OBJECT(source), "capture-mode", 0, NULL); 
- //  g_object_set( G_OBJECT(source), "fps-n", "30", NULL); 
+ //    g_object_set( G_OBJECT(source), "fps-n", "30", NULL); 
 
     pipeline_v1 = gst_pipeline_new("cam-pipeline");
     
